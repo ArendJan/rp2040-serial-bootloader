@@ -105,9 +105,6 @@ function(bootloader_build_combined NAME)
 
 	set(COMBINED ${NAME}_combined)
 
-	
-  
-
 	target_link_libraries(${NAME} bootloader_library)
 	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 		pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined_debug.ld)
@@ -147,12 +144,11 @@ function(bootloader_build_combined NAME)
 		set(UF2_FAMILY "0xe48bff59")
 	elseif(PICO_PLATFORM STREQUAL "rp2350-riscv")
 		set(UF2_FAMILY "0xe48bff5a")
-
-
-
 	else()
 		message(FATAL_ERROR "Unknown PICO_PLATFORM: ${PICO_PLATFORM}")
 	endif()
+	# Assumes picotool is installed to convert the elf to uf2.
+	# Needs to know the family type to generate the correct uf2.
 	add_custom_command(TARGET ${COMBINED} POST_BUILD
 		COMMAND picotool uf2 convert ${COMBINED}.elf ${COMBINED}.uf2 --family ${UF2_FAMILY})
 endfunction()
