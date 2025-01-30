@@ -110,43 +110,36 @@ function(bootloader_build_combined NAME)
 
 	target_link_libraries(${NAME} bootloader_library)
 	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-		
-	pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined_debug.ld)
-	set(SKIP 44)
-	# set(IMAGE_HDR 0x10000000 + )
-	MATH(EXPR IMAGE_HDR 0x10000000+44*1024)
-
-	message(STATUS "IMAGE_HDR: ${IMAGE_HDR}")
+		pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined_debug.ld)
+		set(SKIP 44)
 	else()
 		pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined.ld)
 		set(SKIP 16)
-
-	MATH(EXPR IMAGE_HDR 0x10000000+16*1024)
-	message(STATUS "IMAGE_HDR: ${IMAGE_HDR}")
 	endif()
+	MATH(EXPR IMAGE_HDR 0x10000000+${SKIP}*1024)
+	message(STATUS "IMAGE_HDR: ${IMAGE_HDR}")
+	
+
 	pico_add_bin_output(${NAME})
 
-	# TODO: The hard-coded 20k here is a bit nasty
-	add_custom_target(${APP}_bin DEPENDS ${APP_BIN})
+	add_custom_target(${APP}_bin DEPENDS ${APP_BIN} ${NAME})
 	add_custom_command(OUTPUT ${APP_BIN} DEPENDS ${NAME}.bin
 		COMMAND dd ibs=1k skip=${SKIP} if=${NAME}.bin of=${APP_BIN}
 	)
-
-	# TODO: The hard-coded address here is a bit nasty
-	add_custom_target(${APP}_hdr DEPENDS ${APP}_bin)
-	add_custom_command(OUTPUT ${APP_HDR} DEPENDS ${APP_BIN}
+	add_custom_target(${APP}_hdr DEPENDS ${APP}_bin ${NAME})
+	add_custom_command(OUTPUT ${APP_HDR} DEPENDS ${APP_BIN} ${NAME}
 		COMMAND ${BOOTLOADER_DIR}/gen_imghdr.py -a ${IMAGE_HDR} ${APP_BIN} ${APP_HDR}
 	)
 
-	add_custom_target(${COMBINED} ALL DEPENDS ${APP_HDR})
-	add_custom_command(TARGET ${COMBINED} DEPENDS ${APP_HDR}
+	add_custom_target(${COMBINED} ALL DEPENDS ${APP_HDR} ${NAME})
+	add_custom_command(TARGET ${COMBINED} DEPENDS ${APP_HDR} ${NAME}
 		COMMAND ${CMAKE_OBJCOPY} --update-section .app_hdr=${APP_HDR} ${NAME}.elf ${COMBINED}.elf
 	)
 	add_custom_command(TARGET ${COMBINED} POST_BUILD
 		COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
 	)
-	add_custom_command(TARGET ${COMBINED} POST_BUILD
-		COMMAND rm ${NAME}.uf2 || true
+	add_custom_command(TARGET ${COMBINED} POST_BUILD # This uf2 doesn't work as it has the correct ld script, but the rest wrong.
+		COMMAND rm ${NAME}.uf2 > /dev/null 2>&1  || true
 	)
 	if(PICO_PLATFORM STREQUAL "rp2040")
 		set(UF2_FAMILY "0xe48bff56")

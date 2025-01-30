@@ -21,10 +21,10 @@
     __stack (== StackTop)
 */
 
-/* Skip 16kB at the start of flash, that's where our bootloader is */
+/* Skip 16kB at the start of flash, that's where our bootloader is (40 when bootloader is in debug mode) */
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000 + 40k, LENGTH = 2048k - 40k
+    FLASH(rx) : ORIGIN = 0x10000000 + 16k, LENGTH = 2048k - 16k
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
