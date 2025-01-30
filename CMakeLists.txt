@@ -53,13 +53,21 @@ pico_set_binary_type(bootloader copy_to_ram)
 set_target_properties(bootloader PROPERTIES COMPILE_FLAGS "-Wall")
 
 pico_set_linker_script(bootloader ${CMAKE_CURRENT_SOURCE_DIR}/bootloader.ld)
-
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	target_compile_definitions(bootloader PRIVATE DEBUG)
+	pico_enable_stdio_usb(bootloader 1)
+endif()
+if(${SKIP_BOOTLOADER_ENTRY_PIN})
+	message(STATUS "Skipping bootloader entry pin")
+	add_definitions(-DSKIP_BOOTLOADER_ENTRY_PIN)
+endif()
 target_link_libraries(bootloader
                       pico_stdlib
                       hardware_dma
                       hardware_flash
                       hardware_structs
                       hardware_resets
+
                       cmsis_core)
 
 set(BOOTLOADER_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "")
@@ -97,22 +105,37 @@ function(bootloader_build_combined NAME)
 
 	set(COMBINED ${NAME}_combined)
 
+	
+  
+
 	target_link_libraries(${NAME} bootloader_library)
+	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+		
+	pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined_debug.ld)
+	set(SKIP 44)
+	# set(IMAGE_HDR 0x10000000 + )
+	MATH(EXPR IMAGE_HDR 0x10000000+44*1024)
 
-	pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined.ld)
+	message(STATUS "IMAGE_HDR: ${IMAGE_HDR}")
+	else()
+		pico_set_linker_script(${NAME} ${BOOTLOADER_DIR}/combined.ld)
+		set(SKIP 16)
 
+	MATH(EXPR IMAGE_HDR 0x10000000+16*1024)
+	message(STATUS "IMAGE_HDR: ${IMAGE_HDR}")
+	endif()
 	pico_add_bin_output(${NAME})
 
-	# TODO: The hard-coded 16k here is a bit nasty
+	# TODO: The hard-coded 20k here is a bit nasty
 	add_custom_target(${APP}_bin DEPENDS ${APP_BIN})
 	add_custom_command(OUTPUT ${APP_BIN} DEPENDS ${NAME}.bin
-		COMMAND dd ibs=1k iseek=16 if=${NAME}.bin of=${APP_BIN}
+		COMMAND dd ibs=1k skip=${SKIP} if=${NAME}.bin of=${APP_BIN}
 	)
 
 	# TODO: The hard-coded address here is a bit nasty
 	add_custom_target(${APP}_hdr DEPENDS ${APP}_bin)
 	add_custom_command(OUTPUT ${APP_HDR} DEPENDS ${APP_BIN}
-		COMMAND ${BOOTLOADER_DIR}/gen_imghdr.py -a 0x10004000 ${APP_BIN} ${APP_HDR}
+		COMMAND ${BOOTLOADER_DIR}/gen_imghdr.py -a ${IMAGE_HDR} ${APP_BIN} ${APP_HDR}
 	)
 
 	add_custom_target(${COMBINED} ALL DEPENDS ${APP_HDR})
@@ -122,6 +145,23 @@ function(bootloader_build_combined NAME)
 	add_custom_command(TARGET ${COMBINED} POST_BUILD
 		COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
 	)
+	add_custom_command(TARGET ${COMBINED} POST_BUILD
+		COMMAND rm ${NAME}.uf2 || true
+	)
+	if(PICO_PLATFORM STREQUAL "rp2040")
+		set(UF2_FAMILY "0xe48bff56")
+	elseif(PICO_PLATFORM STREQUAL "rp2350-arm-s")
+		set(UF2_FAMILY "0xe48bff59")
+	elseif(PICO_PLATFORM STREQUAL "rp2350-riscv")
+		set(UF2_FAMILY "0xe48bff5a")
+
+
+
+	else()
+		message(FATAL_ERROR "Unknown PICO_PLATFORM: ${PICO_PLATFORM}")
+	endif()
+	add_custom_command(TARGET ${COMBINED} POST_BUILD
+		COMMAND picotool uf2 convert ${COMBINED}.elf ${COMBINED}.uf2 --family ${UF2_FAMILY})
 endfunction()
 
 # Provide a helper to build a standalone target

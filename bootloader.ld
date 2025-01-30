@@ -21,10 +21,11 @@
     __stack (== StackTop)
 */
 
-/* Limit flash to 12k, so we can use 12-16k for the image header */
+bootloader_size = 40k; /* 4KB stack size */
+/* Limit flash to 40k, so we can use 40-44k for the image header */
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 12k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = bootloader_size
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k

@@ -21,10 +21,14 @@
     __stack (== StackTop)
 */
 
+bootloader_size = 40k; /* debug: 40k, normal 12k */
+header_size = 4k;
 /* Skip 16kB at the start of flash, that's where our bootloader is */
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000 + 40k, LENGTH = 2048k - 40k
+    FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = bootloader_size
+    FLASH_IMGHDR(rx) : ORIGIN = 0x10000000 + bootloader_size, LENGTH = 4k
+    FLASH_APP(rx) : ORIGIN = 0x10000000 + bootloader_size + header_size, LENGTH = 2048k - bootloader_size - header_size
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -36,9 +40,22 @@ SECTIONS
 {
     .flash_begin : {
         __flash_binary_start = .;
-    } > FLASH
+    } > FLASH_APP
 
-    /* boot2 would go here, but we don't want it */
+    /* Insert boot3, which is the combined boot2 + boot3 */
+    .boot3 : {
+        KEEP (*(.boot3))
+    } > FLASH_BL
+
+    /*
+     * Name a section for the image header.
+     * The contents will get replaced post-build
+     */
+    .app_hdr : {
+	LONG(0xdeaddead)
+	LONG(0)
+	LONG(0xdeaddead)
+    } > FLASH_IMGHDR
 
     .text : {
         __logical_binary_start = .;
@@ -67,25 +84,25 @@ SECTIONS
 
         *(.eh_frame*)
         . = ALIGN(4);
-    } > FLASH
+    } > FLASH_APP
 
     .rodata : {
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
-    } > FLASH
+    } > FLASH_APP
 
     .ARM.extab :
     {
         *(.ARM.extab* .gnu.linkonce.armextab.*)
-    } > FLASH
+    } > FLASH_APP
 
     __exidx_start = .;
     .ARM.exidx :
     {
         *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-    } > FLASH
+    } > FLASH_APP
     __exidx_end = .;
 
     /* Machine inspectable binary information */
@@ -95,7 +112,7 @@ SECTIONS
     {
         KEEP(*(.binary_info.keep.*))
         *(.binary_info.*)
-    } > FLASH
+    } > FLASH_APP
     __binary_info_end = .;
     . = ALIGN(4);
 
@@ -154,7 +171,7 @@ SECTIONS
         . = ALIGN(4);
         /* All data end */
         __data_end__ = .;
-    } > RAM AT> FLASH
+    } > RAM AT> FLASH_APP
 
     .uninitialized_data (COPY): {
         . = ALIGN(4);
@@ -167,7 +184,7 @@ SECTIONS
         *(.scratch_x.*)
         . = ALIGN(4);
         __scratch_x_end__ = .;
-    } > SCRATCH_X AT > FLASH
+    } > SCRATCH_X AT > FLASH_APP
     __scratch_x_source__ = LOADADDR(.scratch_x);
 
     .scratch_y : {
@@ -175,7 +192,7 @@ SECTIONS
         *(.scratch_y.*)
         . = ALIGN(4);
         __scratch_y_end__ = .;
-    } > SCRATCH_Y AT > FLASH
+    } > SCRATCH_Y AT > FLASH_APP
     __scratch_y_source__ = LOADADDR(.scratch_y);
 
     .bss  : {
@@ -215,7 +232,7 @@ SECTIONS
 
     .flash_end : {
         __flash_binary_end = .;
-    } > FLASH
+    } > FLASH_APP
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);

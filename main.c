@@ -5,8 +5,21 @@
  */
 #include <stdio.h>
 #include <string.h>
-
+#if PICO_RP2350
+// doesn't work for RP2350 as the bootloader.ld is incorrect for it.
+#ifdef __riscv
+	// 
+#else
+#include "RP2350.h"
+#endif
+#else
 #include "RP2040.h"
+    #endif
+// #if PICO_PLATFORM==rp2040
+// #endif
+// #if PICO_PLATFORM==rp2350
+// #include "RP2350.h"
+// #endif
 #include "pico/time.h"
 #include "hardware/dma.h"
 #include "hardware/flash.h"
@@ -16,7 +29,6 @@
 #include "hardware/resets.h"
 #include "hardware/uart.h"
 #include "hardware/watchdog.h"
-
 #ifdef DEBUG
 #include <stdio.h>
 #include "pico/stdio_usb.h"
@@ -53,7 +65,12 @@
 #define RSP_OK   (('O' << 0) | ('K' << 8) | ('O' << 16) | ('K' << 24))
 #define RSP_ERR  (('E' << 0) | ('R' << 8) | ('R' << 16) | ('!' << 24))
 
-#define IMAGE_HEADER_OFFSET (12 * 1024)
+#ifdef DEBUG
+#define BOOTLOADER_SECTIONS 40
+#else
+#define BOOTLOADER_SECTIONS 12
+#endif
+#define IMAGE_HEADER_OFFSET (BOOTLOADER_SECTIONS * 1024)
 
 #define WRITE_ADDR_MIN (XIP_BASE + IMAGE_HEADER_OFFSET + FLASH_SECTOR_SIZE)
 #define ERASE_ADDR_MIN (XIP_BASE + IMAGE_HEADER_OFFSET)
@@ -615,7 +632,6 @@ static enum state state_read_args(struct cmd_context *ctx)
 	ctx->data = (uint8_t *)(ctx->args + desc->nargs);
 	ctx->resp_args = ctx->args;
 	ctx->resp_data = (uint8_t *)(ctx->resp_args + desc->resp_nargs);
-
 	uart_read_blocking(uart0, (uint8_t *)ctx->args, sizeof(*ctx->args) * desc->nargs);
 
 	return STATE_READ_DATA;
@@ -676,8 +692,13 @@ static bool should_stay_in_bootloader()
 {
 	bool wd_says_so = (watchdog_hw->scratch[5] == BOOTLOADER_ENTRY_MAGIC) &&
 		(watchdog_hw->scratch[6] == ~BOOTLOADER_ENTRY_MAGIC);
+	#ifndef SKIP_BOOTLOADER_ENTRY_PIN
+	bool pin_says_so = !gpio_get(BOOTLOADER_ENTRY_PIN);
+	#else
+	bool pin_says_so = false;
+	#endif
 
-	return !gpio_get(BOOTLOADER_ENTRY_PIN) || wd_says_so;
+	return pin_says_so || wd_says_so;
 }
 
 int main(void)
@@ -686,10 +707,11 @@ int main(void)
 	gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
 	gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
+	#ifndef SKIP_BOOTLOADER_ENTRY_PIN
 	gpio_init(BOOTLOADER_ENTRY_PIN);
 	gpio_pull_up(BOOTLOADER_ENTRY_PIN);
 	gpio_set_dir(BOOTLOADER_ENTRY_PIN, 0);
-
+	#endif
 	sleep_ms(10);
 
 	struct image_header *hdr = (struct image_header *)(XIP_BASE + IMAGE_HEADER_OFFSET);
