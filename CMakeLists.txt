@@ -22,7 +22,7 @@
 # WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.13...4.0)
 
 include(pico_sdk_import.cmake)
 
@@ -127,30 +127,35 @@ function(bootloader_build_combined NAME)
 	add_custom_command(OUTPUT ${APP_HDR} DEPENDS ${APP_BIN} ${NAME}
 		COMMAND ${BOOTLOADER_DIR}/gen_imghdr.py -a ${IMAGE_HDR} ${APP_BIN} ${APP_HDR}
 	)
-
-	add_custom_target(${COMBINED} ALL DEPENDS ${APP_HDR} ${NAME})
-	add_custom_command(TARGET ${COMBINED} DEPENDS ${APP_HDR} ${NAME}
-		COMMAND ${CMAKE_OBJCOPY} --update-section .app_hdr=${APP_HDR} ${NAME}.elf ${COMBINED}.elf
-	)
-	add_custom_command(TARGET ${COMBINED} POST_BUILD
-		COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
-	)
-	add_custom_command(TARGET ${COMBINED} POST_BUILD # This uf2 doesn't work as it has the correct ld script, but the rest wrong.
-		COMMAND rm ${NAME}.uf2 > /dev/null 2>&1  || true
-	)
 	if(PICO_PLATFORM STREQUAL "rp2040")
-		set(UF2_FAMILY "0xe48bff56")
-	elseif(PICO_PLATFORM STREQUAL "rp2350-arm-s")
-		set(UF2_FAMILY "0xe48bff59")
-	elseif(PICO_PLATFORM STREQUAL "rp2350-riscv")
-		set(UF2_FAMILY "0xe48bff5a")
-	else()
-		message(FATAL_ERROR "Unknown PICO_PLATFORM: ${PICO_PLATFORM}")
-	endif()
+	set(UF2_FAMILY "0xe48bff56")
+elseif(PICO_PLATFORM STREQUAL "rp2350-arm-s")
+	set(UF2_FAMILY "0xe48bff59")
+elseif(PICO_PLATFORM STREQUAL "rp2350-riscv")
+	set(UF2_FAMILY "0xe48bff5a")
+else()
+	message(FATAL_ERROR "Unknown PICO_PLATFORM: ${PICO_PLATFORM}")
+endif()
+	add_custom_target(${COMBINED} ALL DEPENDS ${APP_HDR} ${NAME})
+	add_custom_command(TARGET ${COMBINED} POST_BUILD
+		COMMAND "echo" "Creating ${COMBINED}.elf"
+		COMMAND ${CMAKE_OBJCOPY} --update-section .app_hdr=${APP_HDR} ${NAME}.elf ${COMBINED}.elf
+		COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
+		COMMAND rm ${NAME}.uf2 > /dev/null 2>&1  || true
+		COMMAND picotool uf2 convert ${COMBINED}.elf ${NAME}.uf2 --family ${UF2_FAMILY}
+	)
+	# add_custom_command(TARGET ${COMBINED} POST_BUILD
+	# 	COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
+	# 	COMMAND picotool uf2 convert ${COMBINED}.elf ${COMBINED}.uf2 --family ${UF2_FAMILY}
+	# )
+	# add_custom_command(TARGET ${COMBINED} POST_BUILD # This uf2 doesn't work as it has the correct ld script, but the rest wrong.
+	# 	COMMAND rm ${NAME}.uf2 > /dev/null 2>&1  || true
+	# )
+	
 	# Assumes picotool is installed to convert the elf to uf2.
 	# Needs to know the family type to generate the correct uf2.
-	add_custom_command(TARGET ${COMBINED} POST_BUILD
-		COMMAND picotool uf2 convert ${COMBINED}.elf ${COMBINED}.uf2 --family ${UF2_FAMILY})
+	# add_custom_command(TARGET ${COMBINED} POST_BUILD
+	# 	)
 endfunction()
 
 # Provide a helper to build a standalone target
