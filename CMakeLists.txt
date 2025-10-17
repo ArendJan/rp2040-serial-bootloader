@@ -77,15 +77,16 @@ set(BOOTLOADER_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "")
 function(bootloader_define_library)
 	set(NAME bootloader)
 	set(ORIGINAL_BIN ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.bin)
+	set(NEW_BIN ${CMAKE_CURRENT_BINARY_DIR}/${NAME}_new.bin)
 	set(BIN_ASM ${CMAKE_CURRENT_BINARY_DIR}/${NAME}_bin.S)
 
 	add_custom_target(${NAME}_bin DEPENDS ${ORIGINAL_BIN})
-	add_custom_command(OUTPUT ${ORIGINAL_BIN} DEPENDS ${NAME} COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${NAME}> ${ORIGINAL_BIN})
+	add_custom_command(OUTPUT ${NEW_BIN} DEPENDS ${NAME} COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${NAME}> ${NEW_BIN})
 
 	find_package (Python3 REQUIRED COMPONENTS Interpreter)
 	add_custom_target(${NAME}_bin_asm DEPENDS ${BIN_ASM})
-	add_custom_command(OUTPUT ${BIN_ASM} DEPENDS ${ORIGINAL_BIN}
-		COMMAND ${Python3_EXECUTABLE} ${BOOTLOADER_DIR}/mkasm.py ${ORIGINAL_BIN} ${BIN_ASM}
+	add_custom_command(OUTPUT ${BIN_ASM} DEPENDS ${NEW_BIN}
+		COMMAND ${Python3_EXECUTABLE} ${BOOTLOADER_DIR}/mkasm.py ${NEW_BIN} ${BIN_ASM}
 	)
 
 	add_library(${NAME}_library INTERFACE)
@@ -100,7 +101,7 @@ bootloader_define_library()
 
 function(bootloader_build_combined NAME)
 	set(APP ${NAME}_app)
-	set(APP_BIN ${CMAKE_CURRENT_BINARY_DIR}/${APP}.bin)
+	set(APP_BIN ${CMAKE_CURRENT_BINARY_DIR}/${APP}_app.bin)
 	set(APP_HDR ${CMAKE_CURRENT_BINARY_DIR}/${APP}_hdr.bin)
 
 	set(COMBINED ${NAME}_combined)
@@ -117,7 +118,7 @@ function(bootloader_build_combined NAME)
 	message(STATUS "IMAGE_HDR: ${IMAGE_HDR}")
 	
 
-	pico_add_bin_output(${NAME})
+	# pico_add_bin_output(${NAME})
 
 	add_custom_target(${APP}_bin DEPENDS ${APP_BIN} ${NAME})
 	add_custom_command(OUTPUT ${APP_BIN} DEPENDS ${NAME}.bin
@@ -144,6 +145,11 @@ endif()
 		COMMAND rm ${NAME}.uf2 > /dev/null 2>&1  || true
 		COMMAND picotool uf2 convert ${COMBINED}.elf ${NAME}.uf2 --family ${UF2_FAMILY}
 	)
+# einde
+
+
+
+
 	# add_custom_command(TARGET ${COMBINED} POST_BUILD
 	# 	COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
 	# 	COMMAND picotool uf2 convert ${COMBINED}.elf ${COMBINED}.uf2 --family ${UF2_FAMILY}
